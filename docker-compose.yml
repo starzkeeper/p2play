@@ -1,0 +1,58 @@
+services:
+  dozzle:
+    container_name: dozzle
+    image: amir20/dozzle:latest
+    ports:
+      - "777:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+
+  backend_client:
+    build:
+      context: .
+      dockerfile: docker/python/Dockerfile
+    command: uvicorn backend.main:app --reload --host 0.0.0.0 --port 8080 --forwarded-allow-ips='*' --proxy-headers
+    ports:
+      - "8080:8080"
+    environment:
+      - POSTGRES_URL
+    volumes:
+      - ./backend:/app/backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    command: postgres -c 'max_connections=500'
+    restart: on-failure
+    ports:
+      - "${OUT_POSTGRES_PORT}:5432"
+    environment:
+      - POSTGRES_HOST
+      - POSTGRES_DB # from .env
+      - POSTGRES_USER # from .env
+      - POSTGRES_PASSWORD # from .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:alpine  # Используем Redis как брокер
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
