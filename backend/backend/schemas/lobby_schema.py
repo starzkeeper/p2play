@@ -14,7 +14,7 @@ class LobbyStatus(str, enum.Enum):
 
 class MessageAction(str, enum.Enum):
     JOIN = 'join'
-    EXIT = 'exit'
+    LEAVE = 'LEAVE'
     MESSAGE = 'message'
 
 
@@ -23,3 +23,11 @@ class LobbyMessage(BaseModel):
     action: MessageAction = MessageAction.MESSAGE
     message: str
     timestamp: int = Field(default_factory=lambda: int(time.time()))
+
+
+class JoinMessage(BaseModel):
+    action: MessageAction = MessageAction.JOIN
+    lobby_id: str
+    message: str
+    timestamp: int = Field(default_factory=lambda: int(time.time()))
+

@@ -1,7 +1,9 @@
+import asyncio
 import json
 from uuid import uuid4
 
 from redis.asyncio import Redis
+from redis.asyncio.client import PubSub
 from starlette.websockets import WebSocket, WebSocketState
 
 from backend.schemas.lobby_schema import LobbyMessage
@@ -9,20 +11,26 @@ from backend.schemas.lobby_schema import LobbyMessage
 
 class LobbyRepository:
     def __init__(self, redis_client: Redis):
-        self.redis_client = redis_client
-        self.pubsub = redis_client.pubsub()
+        self.redis_client: Redis = redis_client
+        self.pubsub: PubSub = redis_client.pubsub()
 
-    async def create_lobby(self):
+    async def set(self, key: str, value: str):
+        await self.redis_client.set(key, value)
+
+    async def get(self, key: str):
+        return await self.redis_client.get(key)
+
+    async def create_lobby(self, user_id: int):
         lobby_id = str(uuid4())
         data = {
-            "owner_id": json.dumps(None),
-            "players": json.dumps([]),
+            "owner_id": user_id,
+            "players": json.dumps([user_id]),
         }
         await self.redis_client.hset(f"lobby_{lobby_id}", mapping=data)
         return lobby_id
 
     async def get_lobby(self, lobby_id) -> bool:
-        exists = await self.redis_client.exists(f"lobby_{lobby_id}")
+        exists = await self.redis_client.get(f"lobby_{lobby_id}")
         return exists > 0
 
     async def add_player(self, lobby_id: str, user_id: int) -> bool:
@@ -37,23 +45,28 @@ class LobbyRepository:
             updates["owner_id"] = user_id
 
         await self.redis_client.hset(f"lobby_{lobby_id}", mapping=updates)
+        await self.redis_client.set(f"user:{user_id}:lobby_id", f"lobby_{lobby_id}")
         return True
 
-    async def subscribe_to_lobby(self, lobby_id: str):
-        await self.pubsub.subscribe(f"lobby_channel_{lobby_id}")
+    async def subscribe_to(self, channel_name: str):
+        await self.pubsub.subscribe(channel_name)
         return self.pubsub
 
-    async def read_pubsub_messages(self, pubsub, websocket: WebSocket):
-        while True:
-            if websocket.client_state == WebSocketState.DISCONNECTED:
-                break
-            message = await pubsub.get_message(ignore_subscribe_messages=True)
+    async def unsubscribe_from(self, channel_name: str):
+        await self.pubsub.unsubscribe(channel_name)
 
-            if message:
-                await websocket.send_text(message['data'])
+    async def get_message(self, pubsub: PubSub):
+        message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+        return message
 
-    async def publish_message(self, lobby_id: str, message: LobbyMessage):
-        await self.redis_client.publish(f"lobby_channel_{lobby_id}", message.model_dump_json())
+    async def cleanup(self, *pubsubs):
+        for pubsub in pubsubs:
+            if pubsub:
+                await pubsub.unsubscribe()
+                await pubsub.close()
+
+    async def publish_message(self, channel_name: str, message: LobbyMessage):
+        await self.redis_client.publish(channel_name, message.model_dump_json())
 
     async def remove_player(self, lobby_id: str, user_id: int):
         lobby = await self.redis_client.hgetall(f"lobby_{lobby_id}")
@@ -64,6 +77,7 @@ class LobbyRepository:
             return
 
         players.remove(user_id)
+        await self.redis_client.delete(f"user:{user_id}:lobby_id")
 
         if players:
             await self.redis_client.hset(f"lobby_{lobby_id}", "players", json.dumps(players))
@@ -77,6 +91,19 @@ class LobbyRepository:
     async def all_lobbies(self):
         lobbies = await self.redis_client.keys()
         return lobbies
+
+    async def is_user_in_lobby(self, user_id: int) -> bool:
+        lobby_id = await self.redis_client.get(f"user:{user_id}:lobby_id")
+        print(type(lobby_id))
+        print(lobby_id)
+        if lobby_id:
+            lobby_id = json.loads(lobby_id)
+
+        return lobby_id
+
+    async def delete_user_lobby_key(self, user_id):
+        await self.redis_client.delete(f'user:{user_id}:lobby_id')
+        return
 
 
 

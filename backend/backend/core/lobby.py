@@ -26,22 +26,35 @@ async def create_lobby(
         service: Annotated[LobbyService, Depends(lobby_service)],
         user: User = Depends(get_current_user),
 ):
-    res = await service.create_lobby()
+    res = await service.create_lobby(user)
     return JSONResponse(content=res)
 
 
-@router_lobby.websocket("/ws/{lobby_id}")
-async def connect_lobby(
-        websocket: WebSocket,
+@router_lobby.post("/leave")
+async def leave_lobby(
         lobby_id: str,
+        service: Annotated[LobbyService, Depends(lobby_service)],
+        user: User = Depends(get_current_user),
+):
+    res = await service.remove_player(lobby_id, user)
+    return JSONResponse(content=res)
+
+
+@router_lobby.websocket("/ws")
+async def connect_ws(
+        websocket: WebSocket,
         service: LobbyService = Depends(lobby_service),
-        user: User = Depends(get_current_user)
+        user: User = Depends(get_current_user),
 ):
     try:
-        await service.connect_lobby(websocket, user, lobby_id)
+        await service.connect_lobby(websocket, user)
 
         while True:
-            data = await websocket.receive_text()
-            await service.broadcast_message(lobby_id, data, user)
+            data = await websocket.receive_json()
+
+            lobby_id = data["lobby_id"]
+            message = data["message"]
+
+            await service.broadcast_message(lobby_id, message, user)
     except WebSocketDisconnect:
-        await service.remove_player(lobby_id, user)
+        pass

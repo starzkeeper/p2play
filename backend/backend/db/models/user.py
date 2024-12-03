@@ -23,7 +23,7 @@ class User(Base):
         String, index=True, nullable=False
     )
     nickname: Mapped[str] = mapped_column(
-        String(255), index=True, unique=True, nullable=True
+        String(255), index=True, unique=True, nullable=False
     )
     p2b_balance: Mapped[float] = mapped_column(
         Float, index=False, nullable=False, server_default='0'
