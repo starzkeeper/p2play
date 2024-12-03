@@ -1,12 +1,10 @@
-import asyncio
 import json
 from uuid import uuid4
 
 from redis.asyncio import Redis
 from redis.asyncio.client import PubSub
-from starlette.websockets import WebSocket, WebSocketState
 
-from backend.schemas.lobby_schema import LobbyMessage
+from backend.schemas.lobby_schema import LobbyMessage, Sender
 
 
 class LobbyRepository:
@@ -19,6 +17,12 @@ class LobbyRepository:
 
     async def get(self, key: str):
         return await self.redis_client.get(key)
+
+    async def hgetall(self, key: str):
+        return await self.redis_client.hgetall(key)
+
+    async def exists(self, key: str):
+        return await self.redis_client.exists(key)
 
     async def create_lobby(self, user_id: int):
         lobby_id = str(uuid4())
@@ -45,7 +49,7 @@ class LobbyRepository:
             updates["owner_id"] = user_id
 
         await self.redis_client.hset(f"lobby_{lobby_id}", mapping=updates)
-        await self.redis_client.set(f"user:{user_id}:lobby_id", f"lobby_{lobby_id}")
+        await self.redis_client.set(f"user:{user_id}:lobby_id", lobby_id)
         return True
 
     async def subscribe_to(self, channel_name: str):
@@ -59,14 +63,10 @@ class LobbyRepository:
         message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
         return message
 
-    async def cleanup(self, *pubsubs):
-        for pubsub in pubsubs:
-            if pubsub:
-                await pubsub.unsubscribe()
-                await pubsub.close()
-
-    async def publish_message(self, channel_name: str, message: LobbyMessage):
-        await self.redis_client.publish(channel_name, message.model_dump_json())
+    async def publish_message(self, channel_name: str, message: LobbyMessage, sender: Sender):
+        message_dict = message.model_dump()
+        message_dict['sender'] = sender
+        await self.redis_client.publish(channel_name, json.dumps(message_dict))
 
     async def remove_player(self, lobby_id: str, user_id: int):
         lobby = await self.redis_client.hgetall(f"lobby_{lobby_id}")
@@ -92,18 +92,6 @@ class LobbyRepository:
         lobbies = await self.redis_client.keys()
         return lobbies
 
-    async def is_user_in_lobby(self, user_id: int) -> bool:
-        lobby_id = await self.redis_client.get(f"user:{user_id}:lobby_id")
-        print(type(lobby_id))
-        print(lobby_id)
-        if lobby_id:
-            lobby_id = json.loads(lobby_id)
-
-        return lobby_id
-
-    async def delete_user_lobby_key(self, user_id):
-        await self.redis_client.delete(f'user:{user_id}:lobby_id')
-        return
 
 
 

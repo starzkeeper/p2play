@@ -1,6 +1,5 @@
 import enum
 import time
-from typing import TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -12,22 +11,29 @@ class LobbyStatus(str, enum.Enum):
     COMPLETED = "completed"
 
 
+class Sender(str, enum.Enum):
+    USER_CHANNEL = "user_channel"
+    LOBBY_CHANNEL = "lobby_channel"
+
+
 class MessageAction(str, enum.Enum):
     JOIN = 'join'
     LEAVE = 'LEAVE'
     MESSAGE = 'message'
 
 
-class LobbyMessage(BaseModel):
+class UserMessage(BaseModel):
     user_id: int
-    action: MessageAction = MessageAction.MESSAGE
+    action: MessageAction
     message: str
     timestamp: int = Field(default_factory=lambda: int(time.time()))
 
 
-class JoinMessage(BaseModel):
+class LobbyMessage(UserMessage):
+    action: MessageAction = MessageAction.MESSAGE
+    lobby_id: str
+
+
+class JoinMessage(UserMessage):
     action: MessageAction = MessageAction.JOIN
     lobby_id: str
-    message: str
-    timestamp: int = Field(default_factory=lambda: int(time.time()))
-
