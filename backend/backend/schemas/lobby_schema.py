@@ -1,39 +1,48 @@
 import enum
-import time
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+
+from backend.repositories.common_schema import MessageAction, ChannelTypes, Message
 
 
 class LobbyStatus(str, enum.Enum):
     WAITING = "waiting"
-    FULL = "full"
+    SEARCHING = "searching"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
 
 
-class Sender(str, enum.Enum):
+class Recipient(str, enum.Enum):
     USER_CHANNEL = "user_channel"
     LOBBY_CHANNEL = "lobby_channel"
+    MATCH_CHANNEL = "match_channel"
 
 
-class MessageAction(str, enum.Enum):
-    JOIN = 'join'
-    LEAVE = 'LEAVE'
-    MESSAGE = 'message'
-
-
-class UserMessage(BaseModel):
-    user_id: int
-    action: MessageAction
-    message: str
-    timestamp: int = Field(default_factory=lambda: int(time.time()))
-
-
-class LobbyMessage(UserMessage):
+class LobbyMessage(Message):
     action: MessageAction = MessageAction.MESSAGE
+    type: ChannelTypes = ChannelTypes.LOBBY
     lobby_id: str
 
 
-class JoinMessage(UserMessage):
+class JoinMessage(Message):
     action: MessageAction = MessageAction.JOIN
+    type: ChannelTypes = ChannelTypes.LOBBY
     lobby_id: str
+
+
+class LeaveMessage(Message):
+    action: MessageAction = MessageAction.LEAVE
+    type: ChannelTypes = ChannelTypes.LOBBY
+    lobby_id: str
+
+
+class WaitAcceptanceMatchMessage(Message):
+    action: MessageAction.ACCEPT_MATCH = MessageAction.ACCEPT_MATCH
+    type: ChannelTypes = ChannelTypes.MATCH
+    match_id: str
+
+
+class Lobby(BaseModel):
+    owner_id: int
+    players: str
+    lobby_status: LobbyStatus = LobbyStatus.WAITING

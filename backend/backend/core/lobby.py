@@ -12,15 +12,6 @@ from backend.utils.auth_dependencies import get_current_user
 router_lobby = APIRouter()
 
 
-@router_lobby.websocket("/ws")
-async def connect_ws(
-        websocket: WebSocket,
-        service: LobbyService = Depends(lobby_service),
-        user: User = Depends(get_current_user),
-):
-    await service.connect_lobby(websocket, user)
-
-
 @router_lobby.get("/list")
 async def list_lobbies(
         service: Annotated[LobbyService, Depends(lobby_service)],
@@ -47,6 +38,7 @@ async def leave_lobby(
     res = await service.remove_player(user)
     return JSONResponse(content={'result': res})
 
+
 @router_lobby.post("/join")
 async def join_lobby(
         lobby_id: str,
@@ -54,4 +46,22 @@ async def join_lobby(
         user: User = Depends(get_current_user),
 ):
     res = await service.join_lobby(lobby_id, user)
+    return JSONResponse(content={'result': res})
+
+
+@router_lobby.get("/search-user-lobby")
+async def search_user_lobby(
+        service: Annotated[LobbyService, Depends(lobby_service)],
+        user: User = Depends(get_current_user),
+):
+    res = await service.search_lobby(user.id)
+    return JSONResponse(content={'result': res})
+
+
+@router_lobby.post("/start-matchmaking")
+async def start_matchmaking(
+        service: Annotated[LobbyService, Depends(lobby_service)],
+        user: User = Depends(get_current_user),
+):
+    res = await service.add_to_queue(user.id)
     return JSONResponse(content={'result': res})

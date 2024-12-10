@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Union, Dict, Any, TypedDict
+from typing import Any, TypedDict
 
 
 class ApiStatus(str, Enum):
@@ -9,4 +9,4 @@ class ApiStatus(str, Enum):
 
 class DefaultApiResponse(TypedDict):
     status: ApiStatus
-    message: Union[list[Dict[str, Any]], str] | Dict
+    message: Any
