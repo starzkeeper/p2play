@@ -42,8 +42,6 @@ class WebSocketService:
                     await self.broadcast_message(message, user)
                 except WebSocketDisconnect:
                     break
-        except Exception as e:
-            print(f'Unexpected error: {e}')
         finally:
             if task:
                 task.cancel()

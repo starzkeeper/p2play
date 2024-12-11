@@ -1,4 +1,6 @@
 from contextlib import asynccontextmanager
+import logging
+from logging.config import dictConfig
 
 from redis.asyncio import Redis
 from fastapi import FastAPI
@@ -7,7 +9,10 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from backend.core.router import routers
-from backend.core.settings import settings
+from backend.core.settings import settings, LogConfig
+
+dictConfig(LogConfig().model_dump())
+logger = logging.getLogger("p2play")
 
 REDIS_HOST = settings.REDIS_HOST
 REDIS_PORT = settings.REDIS_PORT
@@ -21,9 +26,9 @@ async def redis_pool():
     )
     try:
         await redis_client.ping()
-        print('Redis is connected')
+        logger.info('Redis is connected')
     except Exception as e:
-        print(f'Redis is not connected: {e}')
+        logger.info(f'Redis is not connected: {e}')
     return redis_client
 
 

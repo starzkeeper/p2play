@@ -27,6 +27,9 @@ class BaseRedisRepository:
         res = await self.redis_client.hget(name, key)
         return json.loads(res)
 
+    async def hmget(self, name: str, args: list):
+        return await self.redis_client.hmget(name, *args)
+
     async def hset(
             self,
             name: str,

@@ -8,6 +8,7 @@ from backend.repositories.common_schema import MessageAction, ChannelTypes, Mess
 class LobbyStatus(str, enum.Enum):
     WAITING = "waiting"
     SEARCHING = "searching"
+    ACCEPTANCE = "acceptance"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
 
@@ -46,3 +47,10 @@ class Lobby(BaseModel):
     owner_id: int
     players: str
     lobby_status: LobbyStatus = LobbyStatus.WAITING
+
+
+class AcceptanceMatch(BaseModel):
+    match_id: str
+    acceptance: str
+    lobby_id_1: str
+    lobby_id_2: str

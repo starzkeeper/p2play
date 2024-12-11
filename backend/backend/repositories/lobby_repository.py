@@ -5,7 +5,7 @@ from uuid import uuid4
 from redis.asyncio import Redis
 
 from backend.repositories.base_redis_repository import BaseRedisRepository
-from backend.schemas.lobby_schema import Lobby
+from backend.schemas.lobby_schema import Lobby, AcceptanceMatch
 from backend.schemas.match_schema import Match
 from backend.utils.redis_keys import MatchKeys, LobbyKeys, UserKeys
 
@@ -90,4 +90,17 @@ class LobbyRepository(BaseRedisRepository):
             lobby_id_2=lobby_id_2,
         )
         await self.redis_client.hset(MatchKeys.match(match_id), mapping=match_data.model_dump())
+        return match_id
+
+    async def create_acceptance(self, players_1: list, players_2: list, lobby_id_1: str, lobby_id_2: str) -> str:
+        match_id = str(uuid.uuid4())
+
+        acceptance = {str(player_id): False for player_id in (players_1 + players_2)}
+        acceptance_data = AcceptanceMatch(
+            match_id=match_id,
+            acceptance=json.dumps(acceptance),
+            lobby_id_1=lobby_id_1,
+            lobby_id_2=lobby_id_2,
+        )
+        await self.redis_client.hset(LobbyKeys.acceptance(match_id), mapping=acceptance_data.model_dump())
         return match_id

@@ -1,8 +1,4 @@
-from backend.core.auth import router_auth
-from backend.core.lobby import router_lobby
-from backend.core.match import router_match
-from backend.core.users import router_users
-from backend.core.websocket import router_websocket
+from backend.core.routers import router_auth, router_lobby, router_match, router_users, router_websocket
 
 routers = [
     {

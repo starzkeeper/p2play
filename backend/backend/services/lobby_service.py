@@ -2,7 +2,7 @@ import asyncio
 
 from backend.db.models import User
 from backend.repositories.lobby_repository import LobbyRepository
-from backend.schemas.lobby_schema import JoinMessage, Recipient, LeaveMessage, WaitAcceptanceMatchMessage
+from backend.schemas.lobby_schema import JoinMessage, Recipient, LeaveMessage, WaitAcceptanceMatchMessage, LobbyStatus
 from backend.schemas.response_schema import DefaultApiResponse, ApiStatus
 from backend.utils.redis_keys import LobbyKeys, UserKeys
 
@@ -161,12 +161,15 @@ class LobbyService:
         players_1 = await self.lobby_repository.hget(LobbyKeys.lobby(lobby_id_1), 'players')
         players_2 = await self.lobby_repository.hget(LobbyKeys.lobby(lobby_id_2), 'players')
 
-        match_id = await self.lobby_repository.create_match(
+        match_id = await self.lobby_repository.create_acceptance(
             players_1,
             players_2,
             lobby_id_1,
             lobby_id_2
         )
+
+        await self.lobby_repository.hset(name=LobbyKeys.lobby(lobby_id_1), key='status', value=LobbyStatus.ACCEPTANCE)
+        await self.lobby_repository.hset(name=LobbyKeys.lobby(lobby_id_2), key='status', value=LobbyStatus.ACCEPTANCE)
 
         notification_message = WaitAcceptanceMatchMessage(
             match_id=match_id,

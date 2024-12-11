@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from fastapi import HTTPException
 from jose import jwt, JWTError
 from starlette import status
@@ -19,27 +17,21 @@ class AuthService:
         self.user_repository = user_repository
 
     async def register_user(self, user_data: UserCreate) -> DefaultApiResponse:
-        try:
-            user = await self.user_repository.find_one_or_none(user_data.email)
+        user = await self.user_repository.find_one_or_none(user_data.email)
 
-            if user:
-                return DefaultApiResponse(
-                    status=ApiStatus.ERROR,
-                    message='User already exists',
-                )
-            user_dict = user_data.model_dump()
-            user_dict['password'] = get_password_hash(user_data.password)
-
-            await self.user_repository.add(**user_dict)
-            return DefaultApiResponse(
-                status=ApiStatus.SUCCESS,
-                message='User created',
-            )
-        except Exception as e:
+        if user:
             return DefaultApiResponse(
                 status=ApiStatus.ERROR,
-                message='Something went wrong',
+                message='User already exists',
             )
+        user_dict = user_data.model_dump()
+        user_dict['password'] = get_password_hash(user_data.password)
+
+        await self.user_repository.add(**user_dict)
+        return DefaultApiResponse(
+            status=ApiStatus.SUCCESS,
+            message='User created',
+        )
 
     async def authenticate_user(self, user_data: UserAuth) -> DefaultApiResponse:
         user = await self.user_repository.find_one_or_none(user_data.email)
@@ -59,34 +51,22 @@ class AuthService:
 
     @staticmethod
     async def get_steam_authorization_url() -> DefaultApiResponse:
-        try:
-            steam_openid_url = SteamOID.create_url()
-            return DefaultApiResponse(
-                status=ApiStatus.SUCCESS,
-                message=steam_openid_url,
-            )
-        except Exception as e:
-            return DefaultApiResponse(
-                status=ApiStatus.ERROR,
-                message='Something went wrong'
-            )
+        steam_openid_url = SteamOID.create_url()
+        return DefaultApiResponse(
+            status=ApiStatus.SUCCESS,
+            message=steam_openid_url,
+        )
 
     async def validate_steam_auth(self, callback_data: Request, user_id: int) -> DefaultApiResponse:
-        try:
-            callback_data = callback_data.query_params
-            result = SteamOID.validate_response(callback_data)
-            if result:
-                await self.user_repository.insert_steam_id(steam_id=int(result), user_id=user_id)
-                return DefaultApiResponse(
-                    status=ApiStatus.SUCCESS,
-                    message=result,
-                )
-            else:
-                return DefaultApiResponse(
-                    status=ApiStatus.ERROR,
-                    message='Something went wrong'
-                )
-        except Exception as e:
+        callback_data = callback_data.query_params
+        result = SteamOID.validate_response(callback_data)
+        if result:
+            await self.user_repository.insert_steam_id(steam_id=int(result), user_id=user_id)
+            return DefaultApiResponse(
+                status=ApiStatus.SUCCESS,
+                message=result,
+            )
+        else:
             return DefaultApiResponse(
                 status=ApiStatus.ERROR,
                 message='Something went wrong'

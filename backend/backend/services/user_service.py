@@ -9,29 +9,23 @@ class UserService:
         self.friend_repository = friend_repository
 
     async def send_friend_request(self, friend_id: int, user_id: int):
-        try:
-            if friend_id == user_id:
-                return DefaultApiResponse(
-                    status=ApiStatus.ERROR,
-                    message='You cannot send a friend request to yourself.'
-                )
-            friend = await self.user_repository.find_one_or_none_by_id(friend_id)
-            if not friend:
-                return DefaultApiResponse(
-                    status=ApiStatus.ERROR,
-                    message='User not found'
-                )
-
-            await self.friend_repository.create_friend_request(friend_id, user_id)
-            return DefaultApiResponse(
-                status=ApiStatus.SUCCESS,
-                message='Friend request created successfully.'
-            )
-        except Exception as e:
+        if friend_id == user_id:
             return DefaultApiResponse(
                 status=ApiStatus.ERROR,
-                message='Something went wrong'
+                message='You cannot send a friend request to yourself.'
             )
+        friend = await self.user_repository.find_one_or_none_by_id(friend_id)
+        if not friend:
+            return DefaultApiResponse(
+                status=ApiStatus.ERROR,
+                message='User not found'
+            )
+
+        await self.friend_repository.create_friend_request(friend_id, user_id)
+        return DefaultApiResponse(
+            status=ApiStatus.SUCCESS,
+            message='Friend request created successfully.'
+        )
 
     async def all_friend_requests(self, user_id: int):
         # TODO: info about users
