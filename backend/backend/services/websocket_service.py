@@ -61,7 +61,7 @@ class WebSocketService:
             message_user_id = message_data.get('user_id')
 
             if user_id == message_user_id and action == MessageAction.LEAVE and recipient == Recipient.LOBBY_CHANNEL:
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(0.01)
                 continue
 
             if action in {MessageAction.JOIN, MessageAction.LEAVE} and recipient == Recipient.USER_CHANNEL:

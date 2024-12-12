@@ -3,6 +3,7 @@ from sqlalchemy import select
 
 from backend.db.database import scoped_session
 from backend.db.models import Friend
+from backend.exceptions.exceptions import InvalidOperationError, EntityDoesNotExistError
 from backend.schemas.user_schema import FriendshipStatus
 
 
@@ -21,7 +22,7 @@ class FriendRepository:
             ))
             existing_friendship = result_existing_friendship.scalar_one_or_none()
             if existing_friendship:
-                raise HTTPException(status_code=400, detail='You are already friends')
+                raise InvalidOperationError
 
             new_friend_request = cls.model(user_id=user_id, friend_id=friend_id, status=FriendshipStatus.PENDING)
             session.add(new_friend_request)
@@ -53,10 +54,13 @@ class FriendRepository:
                         cls.model.status == FriendshipStatus.PENDING))
             ))
             friendship = result.scalar_one_or_none()
-            if friendship:
-                friendship.status = FriendshipStatus.ACCEPTED
-                session.add(friendship)
-                await session.commit()
+
+            if not friendship:
+                raise EntityDoesNotExistError
+
+            friendship.status = FriendshipStatus.ACCEPTED
+            session.add(friendship)
+            await session.commit()
 
     @classmethod
     async def all_friends(cls, user_id: int):

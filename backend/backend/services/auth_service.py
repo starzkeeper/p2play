@@ -4,6 +4,7 @@ from starlette import status
 from starlette.requests import Request
 
 from backend.core.settings import settings
+from backend.exceptions.exceptions import EntityAlreadyExistsError, AuthenticationFailed, InvalidTokenError
 from backend.repositories.user_repository import UserRepository
 from backend.schemas.response_schema import DefaultApiResponse, ApiStatus
 from backend.schemas.user_schema import UserCreate, UserAuth
@@ -20,10 +21,8 @@ class AuthService:
         user = await self.user_repository.find_one_or_none(user_data.email)
 
         if user:
-            return DefaultApiResponse(
-                status=ApiStatus.ERROR,
-                message='User already exists',
-            )
+            raise EntityAlreadyExistsError(entity_name=user_data.email)
+
         user_dict = user_data.model_dump()
         user_dict['password'] = get_password_hash(user_data.password)
 
@@ -37,10 +36,7 @@ class AuthService:
         user = await self.user_repository.find_one_or_none(user_data.email)
         if not user or verify_password(plain_password=user_data.password,
                                        hashed_password=user.password) is False:
-            return DefaultApiResponse(
-                status=ApiStatus.ERROR,
-                message='Invalid credentials',
-            )
+            raise AuthenticationFailed
 
         access_token = create_access_token(data={'sub': str(user.id)})
         refresh_token = create_refresh_token(data={'sub': str(user.id)})
@@ -60,29 +56,23 @@ class AuthService:
     async def validate_steam_auth(self, callback_data: Request, user_id: int) -> DefaultApiResponse:
         callback_data = callback_data.query_params
         result = SteamOID.validate_response(callback_data)
-        if result:
-            await self.user_repository.insert_steam_id(steam_id=int(result), user_id=user_id)
-            return DefaultApiResponse(
-                status=ApiStatus.SUCCESS,
-                message=result,
-            )
-        else:
-            return DefaultApiResponse(
-                status=ApiStatus.ERROR,
-                message='Something went wrong'
-            )
+        await self.user_repository.insert_steam_id(steam_id=int(result), user_id=user_id)
+        return DefaultApiResponse(
+            status=ApiStatus.SUCCESS,
+            message=result,
+        )
 
     @staticmethod
     async def validate_refresh_token(refresh_token: str) -> DefaultApiResponse:
         try:
             payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         except JWTError:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='The token is invalid!')
+            raise InvalidTokenError
 
         user_id = payload.get('sub')
         token_type = payload.get('token_type')
         if token_type != 'refresh':
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='The token is invalid!')
+            raise InvalidTokenError
         access_token = create_access_token(data={'sub': str(user_id)})
         refresh_token = create_refresh_token(data={'sub': str(user_id)})
         return DefaultApiResponse(

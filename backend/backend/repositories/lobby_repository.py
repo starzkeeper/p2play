@@ -5,9 +5,8 @@ from uuid import uuid4
 from redis.asyncio import Redis
 
 from backend.repositories.base_redis_repository import BaseRedisRepository
-from backend.schemas.lobby_schema import Lobby, AcceptanceMatch
-from backend.schemas.match_schema import Match
-from backend.utils.redis_keys import MatchKeys, LobbyKeys, UserKeys
+from backend.schemas.lobby_schema import Lobby, AcceptanceMatch, LobbyStatus
+from backend.utils.redis_keys import LobbyKeys, UserKeys
 
 
 class LobbyRepository(BaseRedisRepository):
@@ -78,29 +77,29 @@ class LobbyRepository(BaseRedisRepository):
         lobbies = await self.redis_client.keys()
         return lobbies
 
-    async def create_match(self, players_1: list, players_2: list, lobby_id_1: str, lobby_id_2: str) -> str:
+    async def create_acceptance(self, lobby_id_1: str, lobby_id_2: str) -> tuple[str, list[int]]:
         match_id = str(uuid.uuid4())
 
-        acceptance = {str(player_id): False for player_id in (players_1 + players_2)}
-        match_data = Match(
-            team_1=json.dumps(players_1),
-            team_2=json.dumps(players_2),
-            acceptance=json.dumps(acceptance),
-            lobby_id_1=lobby_id_1,
-            lobby_id_2=lobby_id_2,
-        )
-        await self.redis_client.hset(MatchKeys.match(match_id), mapping=match_data.model_dump())
-        return match_id
+        players_1 = await self.redis_client.hget(LobbyKeys.lobby(lobby_id_1), 'players')
+        players_2 = await self.redis_client.hget(LobbyKeys.lobby(lobby_id_2), 'players')
+        players_1, players_2 = json.loads(players_1), json.loads(players_2)
+        all_players = players_1 + players_2
+        acceptance: dict[str, bool] = {str(player_id): False for player_id in all_players}
+        await self.save_acceptance(match_id, acceptance, lobby_id_1, lobby_id_2)
 
-    async def create_acceptance(self, players_1: list, players_2: list, lobby_id_1: str, lobby_id_2: str) -> str:
-        match_id = str(uuid.uuid4())
+        await self.redis_client.hset(name=LobbyKeys.lobby(lobby_id_1), key='status', value=LobbyStatus.ACCEPTANCE)
+        await self.redis_client.hset(name=LobbyKeys.lobby(lobby_id_2), key='status', value=LobbyStatus.ACCEPTANCE)
+        return match_id, all_players
 
-        acceptance = {str(player_id): False for player_id in (players_1 + players_2)}
+    async def save_acceptance(self, match_id: str, acceptance: dict[str, bool], lobby_id_1: str, lobby_id_2: str):
+        # TODO: TTL
+        ttl = 10 * 60
+        await self.redis_client.hset(LobbyKeys.acceptance(match_id), mapping=acceptance)
+        await self.redis_client.expire(LobbyKeys.acceptance(match_id), ttl)
         acceptance_data = AcceptanceMatch(
             match_id=match_id,
-            acceptance=json.dumps(acceptance),
             lobby_id_1=lobby_id_1,
             lobby_id_2=lobby_id_2,
         )
-        await self.redis_client.hset(LobbyKeys.acceptance(match_id), mapping=acceptance_data.model_dump())
-        return match_id
+        await self.redis_client.hset(LobbyKeys.acceptance_meta(match_id), mapping=acceptance_data.model_dump())
+        await self.redis_client.expire(LobbyKeys.acceptance(match_id), ttl)

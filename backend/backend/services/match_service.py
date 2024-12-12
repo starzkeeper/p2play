@@ -1,11 +1,12 @@
 import asyncio
 import json
 
+from backend.exceptions.exceptions import InvalidOperationError, EntityDoesNotExistError
 from backend.repositories.match_repository import MatchRepository
 from backend.schemas.lobby_schema import Recipient
 from backend.schemas.match_schema import MatchStatus, JoinMatchMessage
 from backend.schemas.response_schema import DefaultApiResponse, ApiStatus
-from backend.utils.redis_keys import MatchKeys, UserKeys
+from backend.utils.redis_keys import MatchKeys, UserKeys, LobbyKeys
 
 
 class MatchService:
@@ -13,35 +14,16 @@ class MatchService:
         self.match_repository = match_repository
 
     async def player_ready(self, match_id: str, user_id: int) -> DefaultApiResponse:
-        match_key = MatchKeys.match(match_id)
-        acceptance: dict[str, bool] = await self.match_repository.hget(match_key, 'acceptance')
-        if not acceptance:
-            return DefaultApiResponse(
-                status=ApiStatus.ERROR,
-                message='Invalid match data'
-            )
+        acceptance_key = LobbyKeys.acceptance(match_id)
 
-        user_id_str = str(user_id)
-        if user_id_str not in acceptance:
-            return DefaultApiResponse(
-                status=ApiStatus.ERROR,
-                message='User not in this match'
-            )
+        if not await self.match_repository.exists(acceptance_key):
+            raise EntityDoesNotExistError('Match')
 
-        acceptance[user_id_str] = True
 
-        data = {
-            'acceptance': json.dumps(acceptance)
-        }
-        all_ready = all(acceptance.values())
-
-        if all_ready:
-            data['status'] = MatchStatus.PREPARATION
-
-        await self.match_repository.hset(match_key, mapping=data)
 
         if all_ready:
             players = acceptance.keys()
+            await self.match_repository.create_match(match_id, )
             set_tasks = [
                 self.match_repository.set(UserKeys.user_match_id(uid), match_id)
                 for uid in players

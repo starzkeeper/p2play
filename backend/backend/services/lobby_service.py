@@ -1,6 +1,7 @@
 import asyncio
 
 from backend.db.models import User
+from backend.exceptions.exceptions import EntityDoesNotExistError, EntityAlreadyExistsError, InvalidOperationError
 from backend.repositories.lobby_repository import LobbyRepository
 from backend.schemas.lobby_schema import JoinMessage, Recipient, LeaveMessage, WaitAcceptanceMatchMessage, LobbyStatus
 from backend.schemas.response_schema import DefaultApiResponse, ApiStatus
@@ -74,18 +75,12 @@ class LobbyService:
     async def join_lobby(self, lobby_id: str, user: User):
         lobby: bool = await self.lobby_repository.exists(LobbyKeys.lobby(lobby_id))
         if not lobby:
-            return DefaultApiResponse(
-                status=ApiStatus.ERROR,
-                message=f'Lobby {lobby_id} does not exist'
-            )
+            raise EntityDoesNotExistError('Lobby')
 
         existed_lobby: str = await self.lobby_repository.get(UserKeys.user_lobby_id(user.id))
 
         if existed_lobby == lobby_id:
-            return DefaultApiResponse(
-                status=ApiStatus.SUCCESS,
-                message='User already joined.'
-            )
+            raise EntityAlreadyExistsError
 
         if existed_lobby:
             await self.remove_player(user)
@@ -127,18 +122,12 @@ class LobbyService:
     async def add_to_queue(self, user_id: int):
         lobby_id = await self.lobby_repository.get(UserKeys.user_lobby_id(user_id))
         if not lobby_id:
-            return DefaultApiResponse(
-                status=ApiStatus.ERROR,
-                message=f'User not in lobby'
-            )
+            raise InvalidOperationError
         lobby = await self.lobby_repository.hgetall(LobbyKeys.lobby(lobby_id))
 
         owner_id = lobby.get('owner_id')
         if int(owner_id) != int(user_id):
-            return DefaultApiResponse(
-                status=ApiStatus.ERROR,
-                message='Only owner can start match'
-            )
+            raise InvalidOperationError
 
         await self.lobby_repository.add_to_queue(lobby_id)
         asyncio.create_task(self.try_create_match())
@@ -149,7 +138,7 @@ class LobbyService:
         )
 
     async def try_create_match(self):
-        # TODO: algorithm and condition race fix
+        # TODO: algorithm, condition race fix, search missing players
         queue = await self.lobby_repository.get_queue()
         if len(queue) < 2:
             return
@@ -158,27 +147,22 @@ class LobbyService:
         await self.lobby_repository.lrem("matchmaking_queue", 0, lobby_id_1)
         await self.lobby_repository.lrem("matchmaking_queue", 0, lobby_id_2)
 
-        players_1 = await self.lobby_repository.hget(LobbyKeys.lobby(lobby_id_1), 'players')
-        players_2 = await self.lobby_repository.hget(LobbyKeys.lobby(lobby_id_2), 'players')
-
-        match_id = await self.lobby_repository.create_acceptance(
-            players_1,
-            players_2,
+        match_id, all_players = await self.lobby_repository.create_acceptance(
             lobby_id_1,
             lobby_id_2
         )
-
-        await self.lobby_repository.hset(name=LobbyKeys.lobby(lobby_id_1), key='status', value=LobbyStatus.ACCEPTANCE)
-        await self.lobby_repository.hset(name=LobbyKeys.lobby(lobby_id_2), key='status', value=LobbyStatus.ACCEPTANCE)
 
         notification_message = WaitAcceptanceMatchMessage(
             match_id=match_id,
             message='Match created',
         )
 
-        await self.lobby_repository.publish_message(
-            LobbyKeys.lobby_channel(lobby_id_1), notification_message, Recipient.LOBBY_CHANNEL
-        )
-        await self.lobby_repository.publish_message(
-            LobbyKeys.lobby_channel(lobby_id_2), notification_message, Recipient.LOBBY_CHANNEL
-        )
+        user_join_messages = [
+            self.lobby_repository.publish_message(
+                UserKeys.user_channel(uid),
+                notification_message,
+                Recipient.USER_CHANNEL
+            )
+            for uid in all_players
+        ]
+        await asyncio.gather(*user_join_messages)

@@ -25,6 +25,10 @@ class LobbyKeys:
     def acceptance(match_id: str) -> str:
         return f"acceptance:{match_id}:players"
 
+    @staticmethod
+    def acceptance_meta(match_id: str) -> str:
+        return f"acceptance_meta:{match_id}"
+
 
 class MatchKeys:
     @staticmethod

@@ -1,10 +1,8 @@
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.db.database import scoped_session
 from backend.db.models import User
-from backend.schemas.user_schema import FriendshipStatus
 
 
 class UserRepository:

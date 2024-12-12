@@ -7,9 +7,12 @@ from fastapi import FastAPI
 
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from backend.core.router import routers
 from backend.core.settings import settings, LogConfig
+from backend.exceptions.exceptions import BaseCustomException
 
 dictConfig(LogConfig().model_dump())
 logger = logging.getLogger("p2play")
@@ -64,3 +67,12 @@ async def health():
 
 for route in routers:
     app.include_router(route["router"], prefix=route["prefix"], tags=route["tags"])
+
+
+@app.exception_handler(BaseCustomException)
+async def base_custom_exception_handler(request: Request, exc: BaseCustomException):
+    logger.debug(exc)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"message": exc.message}
+    )

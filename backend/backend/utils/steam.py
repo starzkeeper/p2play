@@ -1,9 +1,11 @@
 import urllib
+import urllib.error
 from urllib.parse import urlencode
 import urllib.request
 import re
 
 from backend.core.settings import settings
+from backend.exceptions.exceptions import AuthenticationFailed, ServiceError
 
 
 class SteamOID:
@@ -36,20 +38,23 @@ class SteamOID:
 
         for item in signed_args:
             item_arg = f'openid.{item}'
-            if callback_data[item_arg] not in validation_args:
+            if item_arg in callback_data and callback_data[item_arg] not in validation_args:
                 validation_args[item_arg] = callback_data[item_arg]
 
         validation_args['openid.mode'] = 'check_authentication'
         parsed_args = urlencode(validation_args).encode("utf-8")
 
-        with urllib.request.urlopen(SteamOID._steam_openid_url, parsed_args) as request_data:
-            response = request_data.read().decode('utf-8')
+        try:
+            with urllib.request.urlopen(SteamOID._steam_openid_url, parsed_args) as request_data:
+                response = request_data.read().decode('utf-8')
+        except urllib.error.URLError as e:
+            raise ServiceError
 
         if re.search('is_valid:true', response):
             matched = re.search(r'https://steamcommunity.com/openid/id/(\d+)', callback_data['openid.claimed_id'])
             if matched and matched.group(1):
                 return matched.group(1)
             else:
-                return False
+                raise AuthenticationFailed
         else:
-            return False
+            raise AuthenticationFailed

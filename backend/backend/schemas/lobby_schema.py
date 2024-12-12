@@ -51,6 +51,5 @@ class Lobby(BaseModel):
 
 class AcceptanceMatch(BaseModel):
     match_id: str
-    acceptance: str
     lobby_id_1: str
     lobby_id_2: str
