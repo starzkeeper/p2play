@@ -1,10 +1,11 @@
+import copy
 import json
 from typing import Optional
 
 from pydantic import BaseModel
 from redis.asyncio import Redis
 
-from backend.schemas.lobby_schema import Recipient
+from backend.repositories.common_schema import Message, ChannelTypes
 
 
 class BaseRedisRepository:
@@ -45,7 +46,12 @@ class BaseRedisRepository:
 
         raise ValueError("No valid arguments provided to hset")
 
-    async def publish_message(self, channel_name: str, message: BaseModel, recipient: Recipient):
+    async def publish_message(self, channel_name: str, message: BaseModel):
         message_dict = message.model_dump()
-        message_dict['recipient'] = recipient
+        await self.redis_client.publish(channel_name, json.dumps(message_dict))
+
+    async def publish_message_user_channel(self, message: Message, user_id: int, id: str):
+        message_copy = copy.deepcopy(message)
+        message.type = ChannelTypes.USER
+        message_dict = message.model_dump()
         await self.redis_client.publish(channel_name, json.dumps(message_dict))

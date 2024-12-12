@@ -25,4 +25,6 @@ class Message(BaseModel):
     user_id: int | str
     action: MessageAction
     message: str | None
+    id: str
+    type: ChannelTypes
     timestamp: int = Field(default_factory=lambda: int(time.time()))

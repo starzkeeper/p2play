@@ -3,7 +3,6 @@ import json
 
 from backend.exceptions.exceptions import InvalidOperationError, EntityDoesNotExistError
 from backend.repositories.match_repository import MatchRepository
-from backend.schemas.lobby_schema import Recipient
 from backend.schemas.match_schema import MatchStatus, JoinMatchMessage
 from backend.schemas.response_schema import DefaultApiResponse, ApiStatus
 from backend.utils.redis_keys import MatchKeys, UserKeys, LobbyKeys
@@ -31,8 +30,7 @@ class MatchService:
             publish_tasks = [
                 self.match_repository.publish_message(
                     channel_name=UserKeys.user_channel(uid),
-                    message=JoinMatchMessage(match_id=match_id, message='Joined match'),
-                    recipient=Recipient.USER_CHANNEL
+                    message=JoinMatchMessage(match_id=match_id, message='Joined match')
                 )
                 for uid in players
             ]

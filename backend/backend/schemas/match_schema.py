@@ -11,7 +11,7 @@ class MatchStatus(str, Enum):
 
 
 class JoinMatchMessage(Message):
-    action: MessageAction = MessageAction.JOIN
+    action: MessageAction = MessageAction.JOIN_MATCH
     type: ChannelTypes = ChannelTypes.MATCH
     match_id: str
 

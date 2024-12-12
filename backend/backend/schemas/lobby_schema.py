@@ -13,33 +13,27 @@ class LobbyStatus(str, enum.Enum):
     COMPLETED = "completed"
 
 
-class Recipient(str, enum.Enum):
-    USER_CHANNEL = "user_channel"
-    LOBBY_CHANNEL = "lobby_channel"
-    MATCH_CHANNEL = "match_channel"
-
-
 class LobbyMessage(Message):
-    action: MessageAction = MessageAction.MESSAGE
+    action: MessageAction = MessageAction.MESSAGE_LOBBY
     type: ChannelTypes = ChannelTypes.LOBBY
     lobby_id: str
 
 
 class JoinMessage(Message):
-    action: MessageAction = MessageAction.JOIN
+    action: MessageAction = MessageAction.JOIN_LOBBY
     type: ChannelTypes = ChannelTypes.LOBBY
     lobby_id: str
 
 
 class LeaveMessage(Message):
-    action: MessageAction = MessageAction.LEAVE
+    action: MessageAction = MessageAction.LEAVE_LOBBY
     type: ChannelTypes = ChannelTypes.LOBBY
     lobby_id: str
 
 
 class WaitAcceptanceMatchMessage(Message):
     action: MessageAction.ACCEPT_MATCH = MessageAction.ACCEPT_MATCH
-    type: ChannelTypes = ChannelTypes.MATCH
+    type: ChannelTypes = ChannelTypes.USER
     match_id: str
 
 

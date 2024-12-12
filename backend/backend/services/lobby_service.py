@@ -2,8 +2,9 @@ import asyncio
 
 from backend.db.models import User
 from backend.exceptions.exceptions import EntityDoesNotExistError, EntityAlreadyExistsError, InvalidOperationError
+from backend.repositories.common_schema import ChannelTypes
 from backend.repositories.lobby_repository import LobbyRepository
-from backend.schemas.lobby_schema import JoinMessage, Recipient, LeaveMessage, WaitAcceptanceMatchMessage, LobbyStatus
+from backend.schemas.lobby_schema import JoinMessage, LeaveMessage, WaitAcceptanceMatchMessage, LobbyStatus
 from backend.schemas.response_schema import DefaultApiResponse, ApiStatus
 from backend.utils.redis_keys import LobbyKeys, UserKeys
 
@@ -21,12 +22,13 @@ class LobbyService:
         formatted_message = JoinMessage(
             user_id=user.id,
             lobby_id=lobby_id,
-            message=f'Nickname joined the lobby'
+            message=f'Nickname joined the lobby',
+            type=ChannelTypes.USER
         )
 
         await self.lobby_repository.set(UserKeys.user_lobby_id(user.id), lobby_id)
         await self.lobby_repository.publish_message(
-            UserKeys.user_channel(user.id), formatted_message, Recipient.USER_CHANNEL)
+            UserKeys.user_channel(user.id), formatted_message)
 
         return DefaultApiResponse(
             status=ApiStatus.SUCCESS,
@@ -42,21 +44,20 @@ class LobbyService:
             )
 
         await self.lobby_repository.remove_player(lobby_id, user.id)
-        formatted_message = LeaveMessage(
+
+        formatted_message_user = LeaveMessage(
             user_id=user.id,
             message=f'{user.id} left the lobby',
-            lobby_id=lobby_id
+            lobby_id=lobby_id,
         )
 
         await self.lobby_repository.publish_message(
             UserKeys.user_channel(user.id),
-            formatted_message,
-            Recipient.USER_CHANNEL
+            formatted_message_user
         )
         await self.lobby_repository.publish_message(
             LobbyKeys.lobby_channel(lobby_id),
-            formatted_message,
-            Recipient.LOBBY_CHANNEL
+            formatted_message_lobby
 
         )
         return DefaultApiResponse(
@@ -95,10 +96,10 @@ class LobbyService:
 
         await self.lobby_repository.publish_message(UserKeys.user_channel(user.id),
                                                     formatted_message,
-                                                    Recipient.USER_CHANNEL)
+                                                    )
         await self.lobby_repository.publish_message(LobbyKeys.lobby_channel(lobby_id),
                                                     formatted_message,
-                                                    Recipient.LOBBY_CHANNEL)
+                                                    )
 
         return DefaultApiResponse(
             status=ApiStatus.SUCCESS,
@@ -160,8 +161,7 @@ class LobbyService:
         user_join_messages = [
             self.lobby_repository.publish_message(
                 UserKeys.user_channel(uid),
-                notification_message,
-                Recipient.USER_CHANNEL
+                notification_message
             )
             for uid in all_players
         ]
