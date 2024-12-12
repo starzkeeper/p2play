@@ -152,7 +152,7 @@ class LobbyService:
                 "id": match_id,
             }
             user_join_messages.append(self.lobby_repository.publish_message_user_channel(formatted_message))
-        await asyncio.gather(*user_join_messages)
+        await asyncio.gather(*user_join_messages
 
 
 
