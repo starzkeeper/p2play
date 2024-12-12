@@ -5,9 +5,9 @@ from redis.asyncio.client import PubSub
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from backend.db.models import User
-from backend.repositories.common_schema import MessageAction
+from schemas.common_schema import MessageAction
 from backend.repositories.websocket_repository import WebSocketRepository
-from backend.schemas.lobby_schema import JoinMessage, LeaveMessage, ChannelTypes, LobbyMessage
+from backend.schemas.lobby_schema import ChannelTypes, LobbyMessage
 from backend.utils.redis_keys import LobbyKeys, MatchKeys, UserKeys
 
 

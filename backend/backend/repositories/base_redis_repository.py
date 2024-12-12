@@ -1,11 +1,11 @@
-import copy
 import json
 from typing import Optional
 
 from pydantic import BaseModel
 from redis.asyncio import Redis
 
-from backend.repositories.common_schema import Message, ChannelTypes
+from schemas.common_schema import ChannelTypes, Message
+from utils.redis_keys import UserKeys
 
 
 class BaseRedisRepository:
@@ -50,8 +50,9 @@ class BaseRedisRepository:
         message_dict = message.model_dump()
         await self.redis_client.publish(channel_name, json.dumps(message_dict))
 
-    async def publish_message_user_channel(self, message: Message, user_id: int, id: str):
-        message_copy = copy.deepcopy(message)
-        message.type = ChannelTypes.USER
-        message_dict = message.model_dump()
-        await self.redis_client.publish(channel_name, json.dumps(message_dict))
+    async def publish_message_user_channel(self, formatted_message: dict):
+        formatted_message['type'] = ChannelTypes.USER
+        channel_name = UserKeys.user_channel(formatted_message.get('user_id'))
+        message_obj = Message.parse_obj(formatted_message)
+
+        await self.redis_client.publish(channel_name, json.dumps(message_obj.model_dump()))

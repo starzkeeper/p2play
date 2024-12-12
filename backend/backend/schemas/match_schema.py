@@ -2,7 +2,7 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from backend.repositories.common_schema import MessageAction, ChannelTypes, Message
+from schemas.common_schema import MessageAction, ChannelTypes, Message
 
 
 class MatchStatus(str, Enum):

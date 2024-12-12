@@ -7,6 +7,7 @@ from redis.asyncio import Redis
 from backend.repositories.base_redis_repository import BaseRedisRepository
 from backend.schemas.lobby_schema import Lobby, AcceptanceMatch, LobbyStatus
 from backend.utils.redis_keys import LobbyKeys, UserKeys
+from schemas.common_schema import ChannelTypes, Message
 
 
 class LobbyRepository(BaseRedisRepository):
@@ -103,3 +104,11 @@ class LobbyRepository(BaseRedisRepository):
         )
         await self.redis_client.hset(LobbyKeys.acceptance_meta(match_id), mapping=acceptance_data.model_dump())
         await self.redis_client.expire(LobbyKeys.acceptance(match_id), ttl)
+
+    async def publish_message_lobby_channel(self, formatted_message: dict):
+        formatted_message['type'] = ChannelTypes.LOBBY
+        channel_name = LobbyKeys.lobby_channel(formatted_message.get('id'))
+        message_obj = Message.parse_obj(formatted_message)
+
+        await self.redis_client.publish(channel_name, json.dumps(message_obj.model_dump()))
+
