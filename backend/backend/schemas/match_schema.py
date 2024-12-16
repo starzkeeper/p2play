@@ -2,18 +2,16 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from schemas.common_schema import MessageAction, ChannelTypes, Message
+from backend.schemas.common_schema import Message
 
 
 class MatchStatus(str, Enum):
     PREPARATION = 'preparation'
     IN_PROGRESS = "in_progress"
 
+class MatchMessage(Message):
+    from_match_id: str
 
-class JoinMatchMessage(Message):
-    action: MessageAction = MessageAction.JOIN_MATCH
-    type: ChannelTypes = ChannelTypes.MATCH
-    match_id: str
 
 
 class Match(BaseModel):

@@ -1,13 +1,16 @@
 import json
+import logging
 import uuid
 from uuid import uuid4
 
 from redis.asyncio import Redis
 
 from backend.repositories.base_redis_repository import BaseRedisRepository
-from backend.schemas.lobby_schema import Lobby, AcceptanceMatch, LobbyStatus
+from backend.schemas.lobby_schema import Lobby, AcceptanceMatch, LobbyStatus, LobbyMessage, UserAction, UserMessage, \
+    LobbyAction, AcceptanceAction, AcceptanceMessage
 from backend.utils.redis_keys import LobbyKeys, UserKeys
-from schemas.common_schema import ChannelTypes, Message
+
+logger = logging.getLogger('p2play')
 
 
 class LobbyRepository(BaseRedisRepository):
@@ -22,6 +25,12 @@ class LobbyRepository(BaseRedisRepository):
 
     async def remove_from_queue(self, lobby_id: str):
         await self.redis_client.lrem("matchmaking_queue", 0, lobby_id)
+        await self.update_status(LobbyKeys.lobby(lobby_id), LobbyStatus.WAITING)
+        await self.publish_lobby_message(
+            action=LobbyAction.STOP_SEARCH,
+            message='Lobby stop searching',
+            from_lobby_id=lobby_id
+        )
 
     async def get_queue(self) -> list[str]:
         return await self.redis_client.lrange("matchmaking_queue", 0, -1)
@@ -38,6 +47,45 @@ class LobbyRepository(BaseRedisRepository):
     async def get_lobby(self, lobby_id) -> bool:
         exists = await self.redis_client.get(LobbyKeys.lobby(lobby_id))
         return exists > 0
+
+    async def publish_user_message(self, action: UserAction, user_id: int | str, message: str,
+                                   lobby_id: str | None = None) -> None:
+        logger.debug(f'User message sent: {action}')
+
+        formatted_message = UserMessage(
+            action=action,
+            user_id=user_id,
+            message=message,
+            lobby_id=lobby_id
+        )
+        await self.redis_client.publish(UserKeys.user_channel(user_id),
+                                        json.dumps(formatted_message.model_dump(exclude_none=True)))
+
+    async def publish_lobby_message(self, action: LobbyAction, from_lobby_id: str, message: str,
+                                    acceptance_id: str | None = None, user_id: int | str | None = None) -> None:
+        logger.debug(f'Lobby message sent: {action}')
+
+        formatted_message = LobbyMessage(
+            action=action,
+            from_lobby_id=from_lobby_id,
+            message=message,
+            acceptance_id=acceptance_id,
+            user_id=user_id
+        )
+        await self.redis_client.publish(LobbyKeys.lobby_channel(from_lobby_id),
+                                        json.dumps(formatted_message.model_dump(exclude_none=True)))
+
+    async def publish_acceptance_message(self, action: AcceptanceAction, match_id: str,
+                                         user_id: int | str | None = None) -> None:
+        logger.debug(f'Acceptance message sent: {action}')
+
+        formatted_message = AcceptanceMessage(
+            action=action,
+            match_id=match_id,
+            user_id=user_id
+        )
+        await self.redis_client.publish(LobbyKeys.acceptance_channel(match_id),
+                                        json.dumps(formatted_message.model_dump(exclude_none=True)))
 
     async def add_player(self, lobby_id: str, user_id: int) -> bool:
         lobby = await self.redis_client.hgetall(LobbyKeys.lobby(lobby_id))
@@ -58,9 +106,13 @@ class LobbyRepository(BaseRedisRepository):
         lobby = await self.redis_client.hgetall(LobbyKeys.lobby(lobby_id))
         players = json.loads(lobby.get('players', '[]'))
         owner_id = int(lobby.get('owner_id', '0'))
+        status = lobby.get('status')
 
         if user_id not in players:
             return
+
+        if status == LobbyStatus.SEARCHING:
+            await self.remove_from_queue(lobby_id)
 
         players.remove(user_id)
         await self.redis_client.delete(UserKeys.user_lobby_id(user_id))
@@ -81,11 +133,13 @@ class LobbyRepository(BaseRedisRepository):
     async def create_acceptance(self, lobby_id_1: str, lobby_id_2: str) -> tuple[str, list[int]]:
         match_id = str(uuid.uuid4())
 
-        players_1 = await self.redis_client.hget(LobbyKeys.lobby(lobby_id_1), 'players')
-        players_2 = await self.redis_client.hget(LobbyKeys.lobby(lobby_id_2), 'players')
-        players_1, players_2 = json.loads(players_1), json.loads(players_2)
-        all_players = players_1 + players_2
-        acceptance: dict[str, bool] = {str(player_id): False for player_id in all_players}
+        players_1: str = await self.redis_client.hget(LobbyKeys.lobby(lobby_id_1), 'players')
+        players_2: str = await self.redis_client.hget(LobbyKeys.lobby(lobby_id_2), 'players')
+        players_1: list[int] = json.loads(players_1)
+        players_2: list[int] = json.loads(players_2)
+
+        all_players: list[int] = players_1 + players_2
+        acceptance: dict[str, bool] = {str(player_id): json.dumps(False) for player_id in all_players}
         await self.save_acceptance(match_id, acceptance, lobby_id_1, lobby_id_2)
 
         await self.redis_client.hset(name=LobbyKeys.lobby(lobby_id_1), key='status', value=LobbyStatus.ACCEPTANCE)
@@ -103,12 +157,4 @@ class LobbyRepository(BaseRedisRepository):
             lobby_id_2=lobby_id_2,
         )
         await self.redis_client.hset(LobbyKeys.acceptance_meta(match_id), mapping=acceptance_data.model_dump())
-        await self.redis_client.expire(LobbyKeys.acceptance(match_id), ttl)
-
-    async def publish_message_lobby_channel(self, formatted_message: dict):
-        formatted_message['type'] = ChannelTypes.LOBBY
-        channel_name = LobbyKeys.lobby_channel(formatted_message.get('id'))
-        message_obj = Message.parse_obj(formatted_message)
-
-        await self.redis_client.publish(channel_name, json.dumps(message_obj.model_dump()))
-
+        await self.redis_client.expire(LobbyKeys.acceptance_meta(match_id), ttl)

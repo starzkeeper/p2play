@@ -2,9 +2,8 @@ import asyncio
 
 from backend.db.models import User
 from backend.exceptions.exceptions import EntityDoesNotExistError, EntityAlreadyExistsError, InvalidOperationError
-from schemas.common_schema import ChannelTypes, MessageAction
 from backend.repositories.lobby_repository import LobbyRepository
-from backend.schemas.lobby_schema import JoinMessage, WaitAcceptanceMatchMessage
+from backend.schemas.lobby_schema import LobbyStatus, LobbyAction, UserAction
 from backend.schemas.response_schema import DefaultApiResponse, ApiStatus
 from backend.utils.redis_keys import LobbyKeys, UserKeys
 
@@ -20,15 +19,14 @@ class LobbyService:
 
         lobby_id = await self.lobby_repository.create_lobby(user.id)
 
-        formatted_message = {
-            "action": MessageAction.JOIN_LOBBY,
-            "user_id": user.id,
-            "message": f'Nickname joined the lobby',
-            "id": lobby_id,
-        }
-
         await self.lobby_repository.set(UserKeys.user_lobby_id(user.id), lobby_id)
-        await self.lobby_repository.publish_message_user_channel(formatted_message)
+
+        await self.lobby_repository.publish_user_message(
+            action=UserAction.JOIN_LOBBY,
+            user_id=user.id,
+            message=f'Lobby created',
+            lobby_id=lobby_id,
+        )
 
         return DefaultApiResponse(
             status=ApiStatus.SUCCESS,
@@ -45,15 +43,19 @@ class LobbyService:
 
         await self.lobby_repository.remove_player(lobby_id, user.id)
 
-        formatted_message = {
-            "action": MessageAction.LEAVE_LOBBY,
-            "user_id": user.id,
-            "message": f'{user.id} left the lobby',
-            "id": lobby_id,
-        }
+        await self.lobby_repository.publish_user_message(
+            action=UserAction.LEAVE_LOBBY,
+            user_id=user.id,
+            message=f'{user.id} left the lobby',
+            lobby_id=lobby_id
+        )
+        await self.lobby_repository.publish_lobby_message(
+            action=LobbyAction.USER_LEFT_MESSAGE,
+            user_id=user.id,
+            message=f'{user.id} left the lobby',
+            from_lobby_id=lobby_id
+        )
 
-        await self.lobby_repository.publish_message_user_channel(formatted_message)
-        await self.lobby_repository.publish_message_lobby_channel(formatted_message)
         return DefaultApiResponse(
             status=ApiStatus.SUCCESS,
             message=f'{user.id} left the lobby.'
@@ -82,15 +84,18 @@ class LobbyService:
 
         await self.lobby_repository.add_player(lobby_id, user.id)
 
-        formatted_message = {
-            "action": MessageAction.JOIN_LOBBY,
-            "user_id": user.id,
-            "message": f'Nickname joined the lobby',
-            "id": lobby_id,
-        }
-
-        await self.lobby_repository.publish_message_user_channel(formatted_message)
-        await self.lobby_repository.publish_message_lobby_channel(formatted_message)
+        await self.lobby_repository.publish_user_message(
+            action=UserAction.JOIN_LOBBY,
+            user_id=user.id,
+            message=f'Nickname joined the lobby',
+            lobby_id=lobby_id,
+        )
+        await self.lobby_repository.publish_lobby_message(
+            action=LobbyAction.USER_JOINED_MESSAGE,
+            user_id=user.id,
+            message=f'Nickname joined the lobby',
+            from_lobby_id=lobby_id,
+        )
 
         return DefaultApiResponse(
             status=ApiStatus.SUCCESS,
@@ -122,6 +127,13 @@ class LobbyService:
             raise InvalidOperationError
 
         await self.lobby_repository.add_to_queue(lobby_id)
+
+        await self.lobby_repository.publish_lobby_message(
+            action=LobbyAction.START_SEARCH,
+            message='Start searching match',
+            from_lobby_id=lobby_id,
+        )
+        await self.lobby_repository.update_status(LobbyKeys.lobby(lobby_id), LobbyStatus.SEARCHING)
         asyncio.create_task(self.try_create_match())
 
         return DefaultApiResponse(
@@ -143,21 +155,18 @@ class LobbyService:
             lobby_id_1,
             lobby_id_2
         )
-        user_join_messages = []
-        for uid in all_players:
-            formatted_message = {
-                "action": MessageAction.ACCEPT_MATCH,
-                "user_id": uid,
-                "message": f'Match created',
-                "id": match_id,
-            }
-            user_join_messages.append(self.lobby_repository.publish_message_user_channel(formatted_message))
-        await asyncio.gather(*user_join_messages) # commit
-
-
-
-
-
-
-
-
+        tasks = [
+            self.lobby_repository.publish_lobby_message(
+                action=LobbyAction.ACCEPT_MATCH,
+                message=f"Match waiting for acceptance",
+                from_lobby_id=lobby_id_1,
+                acceptance_id=match_id
+            ),
+            self.lobby_repository.publish_lobby_message(
+                action=LobbyAction.ACCEPT_MATCH,
+                message=f"Match waiting for acceptance",
+                from_lobby_id=lobby_id_2,
+                acceptance_id=match_id
+            )
+        ]
+        await asyncio.gather(*tasks)

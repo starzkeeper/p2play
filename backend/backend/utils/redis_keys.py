@@ -1,3 +1,7 @@
+from backend.exceptions.exceptions import EntityDoesNotExistError
+from backend.schemas.common_schema import ChannelTypes
+
+
 class UserKeys:
     @staticmethod
     def user_channel(user_id: int) -> str:
@@ -29,6 +33,10 @@ class LobbyKeys:
     def acceptance_meta(match_id: str) -> str:
         return f"acceptance_meta:{match_id}"
 
+    @staticmethod
+    def acceptance_channel(match_id: str) -> str:
+        return f"acceptance_channel:{match_id}"
+
 
 class MatchKeys:
     @staticmethod
@@ -38,3 +46,15 @@ class MatchKeys:
     @staticmethod
     def match(match_id: str) -> str:
         return f"match_{match_id}"
+
+
+def resolver_channels(channel_id: str, channel_type: ChannelTypes) -> str:
+    channel_names = {
+        ChannelTypes.LOBBY: LobbyKeys.lobby_channel(channel_id),
+        ChannelTypes.MATCH: MatchKeys.match_channel(channel_id),
+    }
+
+    if channel_type not in channel_names:
+        raise EntityDoesNotExistError(channel_type)
+
+    return channel_names[channel_type]

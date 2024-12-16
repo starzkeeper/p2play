@@ -1,14 +1,17 @@
 import asyncio
 import json
+import logging
 
 from redis.asyncio.client import PubSub
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from backend.db.models import User
-from schemas.common_schema import MessageAction
 from backend.repositories.websocket_repository import WebSocketRepository
-from backend.schemas.lobby_schema import ChannelTypes, LobbyMessage
+from backend.schemas.common_schema import ChannelTypes
+from backend.utils.message_handlers.registry import CHANNEL_HANDLERS
 from backend.utils.redis_keys import LobbyKeys, MatchKeys, UserKeys
+
+logger = logging.getLogger('p2play')
 
 
 class WebSocketService:
@@ -56,61 +59,24 @@ class WebSocketService:
 
             message_data = json.loads(message['data'])
             channel_type = message_data.get('type')
+            logger.debug(f'{message_data}')
 
-            if channel_type == ChannelTypes.USER:
-                await self.handle_user_subscriptions(message_data, pubsub)
-
-            # if action in {MessageAction.JOIN, MessageAction.LEAVE} and recipient == Recipient.USER_CHANNEL:
-            #     if channel_type == ChannelTypes.LOBBY:
-            #         await self.handle_lobby_subscription(message_data, pubsub)
-            #     elif channel_type == ChannelTypes.MATCH:
-            #         await self.handle_match_subscription(message_data, pubsub)
+            handler = CHANNEL_HANDLERS.get(ChannelTypes(channel_type))
+            if handler:
+                await handler(message_data, pubsub)
 
             await websocket.send_json(message_data)
 
-    async def handle_user_subscriptions(self, message_data: dict, pubsub: PubSub):
-        action = message_data.get('action')
-        lobby_id = message_data.get('lobby_id')
-        match_id = message_data.get('match_id')
-
-        if action == MessageAction.JOIN_LOBBY:
-            channel = LobbyKeys.lobby_channel(lobby_id)
-            await pubsub.subscribe(channel)
-        elif action == MessageAction.LEAVE_LOBBY:
-            channel = LobbyKeys.lobby_channel(lobby_id)
-            await pubsub.subscribe(channel)
-        elif action == MessageAction.JOIN_MATCH:
-            channel = MatchKeys.match_channel(match_id)
-            await pubsub.subscribe(channel)
-        elif action == MessageAction.LEAVE_MATCH:
-            channel = MatchKeys.match_channel(match_id)
-            await pubsub.subscribe(channel)
-        else:
-            # Если действие не распознано
-            print(f"Unhandled action: {action}")
-
-    # async def handle_match_subscription(self, message_data: JoinMessage | LeaveMessage, pubsub: PubSub):
-    #     match_id = message_data.get('match_id')
-    #     action = message_data.get('action')
-    #     channel = MatchKeys.match_channel(match_id)
-    #
-    #     if action == MessageAction.JOIN:
-    #         await pubsub.subscribe(channel)
-    #     elif action == MessageAction.LEAVE:
-    #         await pubsub.unsubscribe(channel)
-
     async def broadcast_message(self, message: str, user: User):
+        logger.debug('Broadcast message')
         lobby_id = await self.websocket_repository.get(UserKeys.user_lobby_id(user.id))
         if not lobby_id:
             return
 
-        formatted_message = LobbyMessage(
+        await self.websocket_repository.publish_message(
+            action=MessageAction.MESSAGE_LOBBY,
             user_id=user.id,
             message=message,
-            lobby_id=lobby_id
-        )
-
-        await self.websocket_repository.publish_message(
-            LobbyKeys.lobby_channel(lobby_id),
-            formatted_message
+            id=lobby_id,
+            channel_type=ChannelTypes.LOBBY
         )

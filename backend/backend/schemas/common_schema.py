@@ -4,27 +4,28 @@ import time
 from pydantic import BaseModel, Field
 
 
-class MessageAction(str, enum.Enum):
-    JOIN_LOBBY = 'join_lobby'
-    LEAVE_LOBBY = 'leave_lobby'
-    MESSAGE_LOBBY = 'message_lobby'
-
-    JOIN_MATCH = 'join_match'
-    LEAVE_MATCH = 'leave_match'
-    ACCEPT_MATCH = 'accept_match'
-    MESSAGE_MATCH = 'message_match'
+class MetaEnum(enum.EnumMeta):
+    def __contains__(cls, item):
+        try:
+            cls(item)
+        except ValueError:
+            return False
+        return True
 
 
-class ChannelTypes(str, enum.Enum):
+class BaseEnum(enum.Enum, metaclass=MetaEnum):
+    pass
+
+
+class ChannelTypes(str, BaseEnum):
     LOBBY = 'lobby'
     MATCH = 'match'
     USER = 'user'
+    ACCEPTANCE = 'acceptance'
 
 
 class Message(BaseModel):
-    user_id: int | str
-    action: MessageAction
+    action: BaseEnum
     message: str | None
-    id: str
     type: ChannelTypes
     timestamp: int = Field(default_factory=lambda: int(time.time()))
