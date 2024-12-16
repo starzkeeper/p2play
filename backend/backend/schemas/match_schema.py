@@ -9,9 +9,9 @@ class MatchStatus(str, Enum):
     PREPARATION = 'preparation'
     IN_PROGRESS = "in_progress"
 
+
 class MatchMessage(Message):
     from_match_id: str
-
 
 
 class Match(BaseModel):

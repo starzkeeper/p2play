@@ -1,9 +1,10 @@
 import asyncio
+import json
 
 from backend.db.models import User
 from backend.exceptions.exceptions import EntityDoesNotExistError, EntityAlreadyExistsError, InvalidOperationError
 from backend.repositories.lobby_repository import LobbyRepository
-from backend.schemas.lobby_schema import LobbyStatus, LobbyAction, UserAction
+from backend.schemas.lobby_schema import LobbyStatus, LobbyAction, UserAction, AcceptanceAction
 from backend.schemas.response_schema import DefaultApiResponse, ApiStatus
 from backend.utils.redis_keys import LobbyKeys, UserKeys
 
@@ -170,3 +171,24 @@ class LobbyService:
             )
         ]
         await asyncio.gather(*tasks)
+
+    async def player_ready(self, match_id: str, user_id: int) -> DefaultApiResponse:
+        acceptance_key: str = LobbyKeys.acceptance(match_id)
+
+        if not await self.lobby_repository.exists(acceptance_key):
+            raise EntityDoesNotExistError('Match')
+
+        await self.lobby_repository.hset(acceptance_key, str(user_id), json.dumps(True))
+
+        lobby_id_1, lobby_id_2 = await self.lobby_repository.publish_user_ready(match_id, user_id)
+
+        all_ready: bool = await self.lobby_repository.check_all_ready(acceptance_key)
+        if all_ready:
+            asyncio.create_task(
+                self.lobby_repository.start_match(match_id, acceptance_key, lobby_id_1, lobby_id_2)
+            )
+
+        return DefaultApiResponse(
+            status=ApiStatus.SUCCESS,
+            message='Player ready updated'
+        )

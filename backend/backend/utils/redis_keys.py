@@ -33,10 +33,6 @@ class LobbyKeys:
     def acceptance_meta(match_id: str) -> str:
         return f"acceptance_meta:{match_id}"
 
-    @staticmethod
-    def acceptance_channel(match_id: str) -> str:
-        return f"acceptance_channel:{match_id}"
-
 
 class MatchKeys:
     @staticmethod

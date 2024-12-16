@@ -5,7 +5,7 @@ from pydantic import BaseModel, field_validator
 from backend.schemas.common_schema import Message, ChannelTypes, BaseEnum
 
 
-class LobbyStatus(str, enum.Enum):
+class LobbyStatus(str, BaseEnum):
     WAITING = "waiting"
     SEARCHING = "searching"
     ACCEPTANCE = "acceptance"
