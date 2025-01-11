@@ -63,5 +63,15 @@ async def start_matchmaking(
         service: Annotated[LobbyService, Depends(lobby_service)],
         user: User = Depends(get_current_user),
 ):
-    res = await service.add_to_queue(user.id)
+    res = await service.start_searching_match(user.id)
+    return JSONResponse(content={'result': res})
+
+
+@router_lobby.post("/{acceptance_id}/ready")
+async def player_ready(
+        acceptance_id: str,
+        service: Annotated[LobbyService, Depends(lobby_service)],
+        user: User = Depends(get_current_user)
+):
+    res = await service.player_ready(acceptance_id, user.id)
     return JSONResponse(content={'result': res})

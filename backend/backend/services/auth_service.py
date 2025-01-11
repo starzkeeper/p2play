@@ -1,6 +1,4 @@
-from fastapi import HTTPException
 from jose import jwt, JWTError
-from starlette import status
 from starlette.requests import Request
 
 from backend.core.settings import settings

@@ -1,11 +1,10 @@
 import json
 import logging
-from typing import Optional
 
 from redis.asyncio import Redis
 
-from backend.schemas.common_schema import MessageAction, ChannelTypes, Message
-from backend.utils.redis_keys import resolver_channels, UserKeys
+from backend.schemas.lobby_schema import LobbyAction, LobbyMessage
+from backend.utils.redis_keys import LobbyKeys
 
 logger = logging.getLogger('p2play')
 
@@ -26,27 +25,19 @@ class BaseRedisRepository:
     async def exists(self, key: str):
         return await self.redis_client.exists(key)
 
-    async def hget(self, name: str, key: str):
-        res = await self.redis_client.hget(name, key)
-        return json.loads(res)
+    async def update_lobby_status(self, name: str, status: str):
+        await self.redis_client.hset(name, 'lobby_status', status)
 
-    async def hmget(self, name: str, args: list):
-        return await self.redis_client.hmget(name, *args)
+    async def publish_lobby_message(self, action: LobbyAction, from_lobby_id: str, message: str,
+                                    acceptance_id: str | None = None, user_id: int | str | None = None) -> None:
+        logger.debug(f'Lobby message sent: {action}')
 
-    async def hset(
-            self,
-            name: str,
-            key: Optional[str] = None,
-            value: Optional[str] = None,
-            mapping: Optional[dict] = None,
-    ):
-        if mapping is not None:
-            return await self.redis_client.hset(name, mapping=mapping)
-
-        if key is not None and value is not None:
-            return await self.redis_client.hset(name, key, value)
-
-        raise ValueError("No valid arguments provided to hset")
-
-    async def update_status(self, name: str, status: str):
-        await self.redis_client.hset(name, 'status', status)
+        formatted_message = LobbyMessage(
+            action=action,
+            from_lobby_id=from_lobby_id,
+            message=message,
+            acceptance_id=acceptance_id,
+            user_id=user_id
+        )
+        await self.redis_client.publish(LobbyKeys.lobby_channel(from_lobby_id),
+                                        json.dumps(formatted_message.model_dump(exclude_none=True)))

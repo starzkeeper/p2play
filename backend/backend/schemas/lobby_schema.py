@@ -1,6 +1,5 @@
-import enum
-
 from pydantic import BaseModel, field_validator
+from pydantic_core.core_schema import FieldValidationInfo
 
 from backend.schemas.common_schema import Message, ChannelTypes, BaseEnum
 
@@ -22,11 +21,15 @@ class UserAction(str, BaseEnum):
 class LobbyAction(str, BaseEnum):
     START_SEARCH = 'start_search'
     STOP_SEARCH = 'stop_search'
-    USER_JOINED_MESSAGE = 'user_joined'
-    USER_LEFT_MESSAGE = 'user_left'
 
     # Redis
     ACCEPT_MATCH = 'accept_match'
+
+
+class UserLobbyAction(str, BaseEnum):
+    USER_JOINED_MESSAGE = 'user_joined'
+    USER_LEFT_MESSAGE = 'user_left'
+    MESSAGE_LOBBY = 'message_lobby'
 
 
 class AcceptanceAction(str, BaseEnum):
@@ -43,8 +46,8 @@ class UserMessage(Message):
 
     @field_validator('lobby_id')
     @classmethod
-    def validate_lobby_id(cls, value, values):
-        action = values.get('action')
+    def validate_lobby_id(cls, value, info: FieldValidationInfo):
+        action = info.data.get('action')
         if (action == UserAction.JOIN_LOBBY or action == UserAction.LEAVE_LOBBY) and value is None:
             raise ValueError("lobby_id is required")
         return value
@@ -58,17 +61,18 @@ class LobbyMessage(Message):
 
     @field_validator('acceptance_id')
     @classmethod
-    def validate_lobby_id(cls, value, values):
-        action = values.get('action')
+    def validate_lobby_id(cls, value, info: FieldValidationInfo):
+        action = info.data.get('action')
         if action == LobbyAction.ACCEPT_MATCH and value is None:
             raise ValueError("acceptance_id is required")
         return value
 
     @field_validator('user_id')
     @classmethod
-    def validate_user_id(cls, value, values):
-        action = values.get('action')
-        if action == LobbyAction.USER_JOINED_MESSAGE or action == LobbyAction.USER_LEFT_MESSAGE and value is None:
+    def validate_user_id(cls, value, info: FieldValidationInfo):
+        action = info.data.get('action')
+        print(value)
+        if action in UserLobbyAction and value is None:
             raise ValueError("user_id is required")
         return value
 
@@ -80,8 +84,8 @@ class AcceptanceMessage(Message):
 
     @field_validator('user_id')
     @classmethod
-    def validate_lobby_id(cls, value, values):
-        action = values.get('action')
+    def validate_lobby_id(cls, value, info: FieldValidationInfo):
+        action = info.data.get('action')
         if action == AcceptanceAction.USER_ACCEPTED and value is None:
             raise ValueError("user_id is required")
         return value

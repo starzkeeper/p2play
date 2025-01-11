@@ -8,6 +8,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 from backend.db.models import User
 from backend.repositories.websocket_repository import WebSocketRepository
 from backend.schemas.common_schema import ChannelTypes
+from backend.schemas.lobby_schema import LobbyAction, UserLobbyAction
 from backend.utils.message_handlers.registry import CHANNEL_HANDLERS
 from backend.utils.redis_keys import LobbyKeys, MatchKeys, UserKeys
 
@@ -62,6 +63,7 @@ class WebSocketService:
             logger.debug(f'{message_data}')
 
             handler = CHANNEL_HANDLERS.get(ChannelTypes(channel_type))
+            logger.debug(f'handler: {handler}')
             if handler:
                 await handler(message_data, pubsub)
 
@@ -73,10 +75,9 @@ class WebSocketService:
         if not lobby_id:
             return
 
-        await self.websocket_repository.publish_message(
-            action=MessageAction.MESSAGE_LOBBY,
+        await self.websocket_repository.publish_lobby_message(
+            action=UserLobbyAction.MESSAGE_LOBBY,
             user_id=user.id,
             message=message,
-            id=lobby_id,
-            channel_type=ChannelTypes.LOBBY
+            from_lobby_id=lobby_id,
         )

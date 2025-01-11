@@ -19,3 +19,5 @@ class WebSocketRepository(BaseRedisRepository):
     async def get_message(self, pubsub: PubSub):
         message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
         return message
+
+
