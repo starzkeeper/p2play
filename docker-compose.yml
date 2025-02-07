@@ -12,7 +12,7 @@ services:
     build:
       context: .
       dockerfile: docker/python/Dockerfile
-    command: uvicorn backend.main:app --reload --host 0.0.0.0 --port 8080 --forwarded-allow-ips='*' --proxy-headers
+    command: uvicorn backend.main.web:app --reload --host 0.0.0.0 --port 8080 --forwarded-allow-ips='*' --proxy-headers
     #hypercorn backend.main:app --bind 0.0.0.0:8080 --certfile=cert.pem --keyfile=key.pem
     ports:
       - "8080:8080"
@@ -46,7 +46,7 @@ services:
       retries: 3
 
   redis:
-    image: redis:alpine  # Используем Redis как брокер
+    image: redis/redis-stack:latest
     ports:
       - "6379:6379"
     #    expose:
@@ -56,6 +56,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  mongodb:
+    image: mongo:latest
+    env_file: .env
+    ports:
+      - '27017:27017'
+#    environment:
+#      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+#      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+#    volumes:
+#      - mongo_data:/data/db
+#      - ./db_confs/mongod.conf:/etc/mongo/mongod.conf
+#    command: [ "mongod", "--config", "/etc/mongo/mongod.conf" ]
 
 volumes:
   postgres_data:

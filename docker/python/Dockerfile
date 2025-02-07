@@ -18,5 +18,5 @@ COPY backend/pyproject.toml ./
 # Load sources (COPY command not copy directories, load only files inside)
 COPY backend/backend ./backend
 
-RUN poetry lock --no-update
+RUN poetry lock
 RUN poetry install
