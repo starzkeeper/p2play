@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from backend.application.lobby.interactors.create_lobby import CreateLobby
 from backend.application.lobby.interactors.get_lobby_by_uid import GetUserLobby
 from backend.application.lobby.interactors.join_lobby import JoinLobby, JoinLobbyDTO
-from backend.application.lobby.interactors.player_ready import PlayerReady, PlayerReadyDTO
+from backend.application.match.interactors.player_ready import PlayerReady, PlayerReadyDTO
 from backend.application.lobby.interactors.remove_player import RemovePlayer
 from backend.application.lobby.interactors.start_searching import StartSearching
 from backend.application.lobby.interactors.stop_searching import StopSearching

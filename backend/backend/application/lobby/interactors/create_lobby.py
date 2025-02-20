@@ -3,7 +3,8 @@ import logging
 from backend.application.common.id_provider import IdProvider
 from backend.application.common.interactor import Interactor
 from backend.application.lobby.actions import remove_player_action
-from backend.application.lobby.gateway import LobbyReader, LobbySaver, QueueSaver, LobbyPubSubInterface
+from backend.application.lobby.gateway import LobbyReader, LobbySaver, LobbyPubSubInterface
+from backend.application.queue.gateway import QueueSaver
 from backend.application.users.gateway import UserPubSubInterface
 from backend.domain.lobby.models import LobbyId, Lobby
 from backend.domain.user.models import User

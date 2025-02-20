@@ -24,4 +24,4 @@ async def connect_ws(
         user = await id_provider.get_current_user()
         service: ConnectWebsocket = await request_container.get(ConnectWebsocket)
         await service(user.id)
-    await websocket_handler.receive()
+    await websocket_handler.receive(user.id)

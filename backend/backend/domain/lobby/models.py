@@ -7,7 +7,7 @@ from backend.domain.common.base_enum import BaseStrEnum
 from backend.domain.user.models import UserId
 
 LobbyId = NewType('LobbyId', uuid.UUID)
-MatchId = NewType('MatchId', str)
+MatchId = NewType('MatchId', uuid.UUID)
 
 
 class LobbyStatus(BaseStrEnum):

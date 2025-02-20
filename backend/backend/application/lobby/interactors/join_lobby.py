@@ -7,7 +7,8 @@ from backend.application.common.interactor import Interactor
 from backend.application.errors.exceptions import OptimisticLockException, TooManyRetries
 from backend.application.errors.lobby import LobbyDoesNotExist
 from backend.application.lobby.actions import remove_player_action
-from backend.application.lobby.gateway import LobbyReader, LobbySaver, QueueSaver, LobbyPubSubInterface
+from backend.application.lobby.gateway import LobbyReader, LobbySaver, LobbyPubSubInterface
+from backend.application.lobby.services_interface import QueueServiceInterface
 from backend.application.users.gateway import UserPubSubInterface
 from backend.domain.lobby.exceptions import UserAlreadyInLobby
 from backend.domain.lobby.models import LobbyId
@@ -27,17 +28,17 @@ class JoinLobby(Interactor[JoinLobbyDTO, None]):
             self,
             lobby_reader: LobbyReader,
             lobby_saver: LobbySaver,
-            queue_saver: QueueSaver,
             id_provider: IdProvider,
             lobby_pubsub: LobbyPubSubInterface,
             user_pubsub: UserPubSubInterface,
+            queue_service: QueueServiceInterface
     ):
         self.lobby_reader = lobby_reader
         self.lobby_saver = lobby_saver
-        self.queue_saver = queue_saver
         self.id_provider = id_provider
         self.lobby_pubsub = lobby_pubsub
         self.user_pubsub = user_pubsub
+        self.queue_service = queue_service
 
     async def __call__(self, data: JoinLobbyDTO) -> None:
         user: User = await self.id_provider.get_current_user()
@@ -55,9 +56,9 @@ class JoinLobby(Interactor[JoinLobbyDTO, None]):
                 self.lobby_reader,
                 previous_lobby_id,
                 user.id,
-                self.queue_saver,
                 self.lobby_pubsub,
                 self.user_pubsub,
+                self.queue_service
             )
 
         max_retries = 5

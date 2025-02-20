@@ -70,26 +70,6 @@ class LobbyGateway(LobbySaver, LobbyReader):
         if result.matched_count == 0:
             raise OptimisticLockException
 
-    async def create_acceptance(self, match_id: MatchId, acceptance: dict) -> None:
-        # ttl = 10 * 60
-        await self.redis_client.hset(LobbyKeys.acceptance(match_id), mapping=acceptance)
-        # await self.redis_client.expire(LobbyKeys.acceptance(match_id), ttl)
-
-    async def update_acceptance(self, user_id: UserId, match_id: MatchId) -> None:
-        await self.redis_client.hset(LobbyKeys.acceptance(match_id), str(user_id), json.dumps(True))
-
-    async def create_acceptance_meta(self, match_id: MatchId, lobby_id_1: LobbyId, lobby_id_2: LobbyId) -> None:
-        acceptance_meta = {
-            "match_id": str(match_id),
-            "lobby_id_1": str(lobby_id_1),
-            "lobby_id_2": str(lobby_id_2)
-        }
-        await self.redis_client.hset(LobbyKeys.acceptance_meta(match_id), mapping=acceptance_meta)
-
-    async def get_players(self, lobby_id: LobbyId) -> list[UserId]:
-        lobby = await self.collection.find_one({"lobby_id": lobby_id}, {"_id": 0, "players": 1})
-        return lobby.get("players", [])
-
     async def lobby_exists(self, lobby_id: LobbyId) -> bool:
         result = await self.collection.find_one({"lobby_id": lobby_id}, {"_id": 1})
         return result is not None
@@ -114,19 +94,6 @@ class LobbyGateway(LobbySaver, LobbyReader):
         if not lobby_id:
             return None
         return LobbyId(uuid.UUID(lobby_id))
-
-    async def acceptance_exists(self, acceptance_id: LobbyId) -> bool:
-        return await self.redis_client.exists(LobbyKeys.acceptance(acceptance_id))
-
-    async def check_all_ready(self, acceptance_id: str) -> bool:
-        acceptance = await self.redis_client.hvals(LobbyKeys.acceptance(acceptance_id))
-        print(acceptance)
-        return all(json.loads(value) for value in acceptance)
-
-    async def get_acceptance_meta(self, acceptance_id: str) -> tuple[LobbyId, LobbyId]:
-        result = await self.redis_client.hgetall(LobbyKeys.acceptance_meta(acceptance_id))
-        lobby_id_1, lobby_id_2 = LobbyId(uuid.UUID(result['lobby_id_1'])), LobbyId(uuid.UUID(result['lobby_id_2']))
-        return lobby_id_1, lobby_id_2
 
 
 class LobbyPubSubGateway(LobbyPubSubInterface):
@@ -179,5 +146,14 @@ class LobbyPubSubGateway(LobbyPubSubInterface):
             action=LobbyAction.ACCEPT_MATCH,
             message='Lobby match found',
             match_id=match_id,
+        )
+        await self.redis_client.publish(LobbyKeys.lobby_channel(lobby_id), message.model_dump_json(exclude_none=True))
+
+    async def publish_lobby_user_message(self, user_id: UserId, lobby_id: LobbyId, message: str) -> None:
+        message = LobbyMessage(
+            user_id=user_id,
+            from_lobby_id=lobby_id,
+            message=message,
+            action=UserLobbyAction.MESSAGE_LOBBY,
         )
         await self.redis_client.publish(LobbyKeys.lobby_channel(lobby_id), message.model_dump_json(exclude_none=True))

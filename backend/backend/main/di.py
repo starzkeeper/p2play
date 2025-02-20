@@ -19,11 +19,13 @@ from backend.adapters.auth.token import JwtTokenProcessor, TokenIdProvider
 from backend.adapters.db.database import redis_pool
 from backend.adapters.gateways.friendship import FriendshipGateway
 from backend.adapters.gateways.lobby import LobbyGateway, LobbyPubSubGateway
-from backend.adapters.gateways.match import MatchGateway
+from backend.adapters.gateways.match import MatchGateway, MatchPubSubGateway
 from backend.adapters.gateways.refresh import RefreshGateway
 from backend.adapters.pubsub.pubsub import PubSubGateway
 from backend.adapters.gateways.queue import QueueGateway
 from backend.adapters.gateways.user import UserGateway, UserPubSubGateway
+from backend.adapters.service_relations.match import MatchServiceGateway
+from backend.adapters.service_relations.queue import QueueServiceGateway
 
 from backend.adapters.steam.steam_processor import SteamProcessor
 from backend.application.auth.gateway import RefreshReader, RefreshSaver
@@ -39,18 +41,24 @@ from backend.application.friendships.interactors.get_friends import GetAllFriend
 from backend.application.friendships.interactors.get_sent_friend_requests import GetSentFriendRequests
 from backend.application.friendships.interactors.send_friend_request import SendFriendRequest
 from backend.application.google.interactors.create_user_google_callback import CreateUserGoogleCallback
-from backend.application.lobby.gateway import LobbyReader, LobbySaver, QueueReader, QueueSaver, LobbyPubSubInterface
+from backend.application.lobby.gateway import LobbyReader, LobbySaver, LobbyPubSubInterface
+from backend.application.lobby.interactors.broadcast_lobby_message import BroadcastLobbyMessage
 from backend.application.lobby.interactors.create_lobby import CreateLobby
 from backend.application.lobby.interactors.get_lobby_by_uid import GetUserLobby
 from backend.application.lobby.interactors.join_lobby import JoinLobby
-from backend.application.lobby.interactors.player_ready import PlayerReady
+from backend.application.match.interactors.player_ready import PlayerReady
 from backend.application.lobby.interactors.remove_player import RemovePlayer
-from backend.application.lobby.interactors.send_lobby_message import SendChatLobbyMessage
 from backend.application.lobby.interactors.start_searching import StartSearching
 from backend.application.lobby.interactors.stop_searching import StopSearching
-from backend.application.match.gateway import MatchSaver, MatchReader
+from backend.application.lobby.services_interface import QueueServiceInterface, MatchServiceInterface
+from backend.application.match.gateway import MatchSaver, MatchReader, MatchPubSubInterface
+from backend.application.match.interactors.create_acceptance import CreateAcceptance
+from backend.application.match.interactors.create_match import CreateMatch
 from backend.application.match.interactors.get_maps import GetMaps
 from backend.application.match.interactors.get_match_by_id import GetMatchById
+from backend.application.queue.gateway import QueueReader, QueueSaver
+from backend.application.queue.interactors.add_lobby_to_queue import AddLobbyToQueue
+from backend.application.queue.interactors.remove_lobby_from_queue import RemoveFromQueue
 from backend.application.steam.gateway import SteamInterface
 from backend.application.steam.interactors.create_steam_auth_url import CreateSteamAuthUrl
 from backend.application.steam.interactors.validate_steam_auth import ValidateSteamAuth
@@ -101,9 +109,24 @@ def gateway_provider() -> Provider:
         provides=UserPubSubInterface
     )
     provider.provide(
+        MatchPubSubGateway,
+        scope=Scope.REQUEST,
+        provides=MatchPubSubInterface
+    )
+    provider.provide(
         RefreshGateway,
         scope=Scope.REQUEST,
         provides=AnyOf[RefreshReader, RefreshSaver]
+    )
+    provider.provide(
+        QueueServiceGateway,
+        scope=Scope.REQUEST,
+        provides=QueueServiceInterface
+    )
+    provider.provide(
+        MatchServiceGateway,
+        scope=Scope.REQUEST,
+        provides=MatchServiceInterface
     )
 
     return provider
@@ -143,15 +166,21 @@ def interactor_provider() -> Provider:
     provider.provide(CreateLobby)
     provider.provide(GetUserLobby)
     provider.provide(JoinLobby)
-    provider.provide(PlayerReady)
     provider.provide(RemovePlayer)
     provider.provide(StartSearching)
-    provider.provide(SendChatLobbyMessage)
     provider.provide(StopSearching)
+    provider.provide(BroadcastLobbyMessage)
 
     # Match
     provider.provide(GetMatchById)
     provider.provide(GetMaps)
+    provider.provide(CreateAcceptance)
+    provider.provide(CreateMatch)
+    provider.provide(PlayerReady)
+
+    # Queue
+    provider.provide(AddLobbyToQueue)
+    provider.provide(RemoveFromQueue)
 
     # Steam
     provider.provide(CreateSteamAuthUrl)
@@ -214,14 +243,15 @@ class RedisProvider(Provider):
         pubsub_client = redis_client.pubsub()
         return PubSubGateway(
             websocket=websocket,
-            pubsub=pubsub_client
+            pubsub=pubsub_client,
+            redis_client=redis_client
         )
 
 
 class WebSocketProvider(Provider):
     @provide(scope=Scope.SESSION)
-    async def get_websocket_handler(self, websocket: WebSocket, pubsub_gateway: PubSubInterface) -> WebSocketHandler:
-        return WebSocketHandler(websocket, pubsub_gateway)
+    async def get_websocket_handler(self, websocket: WebSocket, pubsub_gateway: PubSubInterface, container: AsyncContainer) -> WebSocketHandler:
+        return WebSocketHandler(websocket, pubsub_gateway, container)
 
 
 def setup_providers() -> list[Provider]:

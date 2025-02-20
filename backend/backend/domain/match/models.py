@@ -12,6 +12,13 @@ class MatchStatus(BaseStrEnum):
     IN_PROGRESS = auto()
 
 
+class MatchAction(BaseStrEnum):
+    MATCH_PREPARATION_STARTED = auto()
+    BAN_MAP = auto()
+    BAN_SERVER = auto()
+    MATCH_READY = auto()
+
+
 @dataclass
 class Match:
     owner_team_1: UserId

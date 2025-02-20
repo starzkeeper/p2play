@@ -2,7 +2,7 @@ import uuid
 
 from redis.asyncio import Redis
 
-from backend.application.lobby.gateway import QueueSaver, QueueReader
+from backend.application.queue.gateway import QueueReader, QueueSaver
 from backend.domain.lobby.models import LobbyId
 
 

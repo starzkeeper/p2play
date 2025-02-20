@@ -1,7 +1,8 @@
 from backend.application.common.id_provider import IdProvider
 from backend.application.common.interactor import Interactor
-from backend.application.lobby.actions import start_acceptance
-from backend.application.lobby.gateway import LobbyReader, LobbySaver, QueueSaver, QueueReader, LobbyPubSubInterface
+from backend.application.lobby.gateway import LobbyReader, LobbySaver, LobbyPubSubInterface
+from backend.application.lobby.services_interface import QueueServiceInterface, MatchServiceInterface
+from backend.application.queue.interactors.add_lobby_to_queue import QueueInputDTO
 from backend.domain.lobby.exceptions import LobbyAlreadyInMatch
 from backend.domain.lobby.models import LobbyStatus
 from backend.domain.lobby.service import check_user_is_owner
@@ -12,17 +13,17 @@ class StartSearching(Interactor[None, None]):
             self,
             lobby_reader: LobbyReader,
             lobby_saver: LobbySaver,
-            queue_saver: QueueSaver,
-            queue_reader: QueueReader,
             lobby_pubsub: LobbyPubSubInterface,
             id_provider: IdProvider,
+            queue_service: QueueServiceInterface,
+            match_service: MatchServiceInterface,
     ):
         self.lobby_reader = lobby_reader
         self.lobby_saver = lobby_saver
-        self.queue_saver = queue_saver
-        self.queue_reader = queue_reader
         self.lobby_pubsub = lobby_pubsub
         self.id_provider = id_provider
+        self.queue_service = queue_service
+        self.match_service = match_service
 
     async def __call__(self, data: None = None) -> None:
         user = await self.id_provider.get_current_user()
@@ -36,12 +37,13 @@ class StartSearching(Interactor[None, None]):
 
         lobby.lobby_status = LobbyStatus.SEARCHING
         await self.lobby_saver.update_lobby(lobby, version)
-        await self.queue_saver.add_to_queue(lobby_id)
+
+        await self.queue_service.add_to_queue(
+            QueueInputDTO(
+                lobby_id=lobby_id
+            )
+        )
+
         await self.lobby_pubsub.publish_lobby_start_searching(lobby_id)
 
-        await start_acceptance(
-            self.lobby_saver,
-            self.lobby_reader,
-            self.queue_reader,
-            self.queue_saver,
-        )
+        await self.match_service.create_acceptance()

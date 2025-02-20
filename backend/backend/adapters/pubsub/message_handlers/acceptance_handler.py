@@ -13,3 +13,6 @@ async def handle_lobby_subscriptions(message_data: dict, pubsub: PubSub):
 
     if action == AcceptanceAction.CANCEL_MATCH:
         await pubsub.unsubscribe(MatchKeys.match_channel(match_id))
+
+    if action == AcceptanceAction.JOIN_MATCH:
+        await pubsub.subscribe(MatchKeys.match_channel(match_id))

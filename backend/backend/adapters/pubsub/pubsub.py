@@ -2,14 +2,16 @@ import asyncio
 import json
 import logging
 
-from redis.asyncio.client import PubSub
+from redis.asyncio.client import PubSub, Redis
 from fastapi import WebSocket
 
+from backend.adapters.messages.lobby import LobbyMessage
 from backend.adapters.messages.message import ChannelTypes
 from backend.adapters.persistence.redis_keys import UserKeys, LobbyKeys, MatchKeys
 from backend.adapters.pubsub.message_handlers.registry import CHANNEL_HANDLERS
 from backend.application.websocket.gateway import PubSubInterface
-from backend.domain.lobby.models import MatchId, LobbyId
+from backend.domain.lobby.models import MatchId, LobbyId, UserLobbyAction
+from backend.domain.match.models import MatchAction
 from backend.domain.user.models import UserId
 
 logger = logging.getLogger('p2play')
@@ -19,9 +21,11 @@ class PubSubGateway(PubSubInterface):
 
     def __init__(
             self,
+            redis_client: Redis,
             pubsub: PubSub,
             websocket: WebSocket
     ):
+        self.redis_client = redis_client
         self.pubsub: PubSub = pubsub
         self.websocket: WebSocket = websocket
         self.listen_task: asyncio.Task | None = None
@@ -91,3 +95,24 @@ class PubSubGateway(PubSubInterface):
             self.listen_task = None
         await self.pubsub.close()
         logger.debug("PubSub closed")
+
+    async def broadcast_lobby_message(self, message: str, user_id: UserId) -> None:
+        lobby_channel = next(
+            (channel for channel in self.pubsub.channels.keys() if channel.startswith("lobby_channel:")),
+            None
+        )
+        if not lobby_channel:
+            logger.debug("No lobby channel found for broadcasting message.")
+            return
+        message_pubsub = LobbyMessage(
+            user_id=user_id,
+            from_lobby_id=lobby_channel.split(":", 1)[1],
+            message=message,
+            action=UserLobbyAction.MESSAGE_LOBBY,
+        )
+        await self.redis_client.blpop()
+        await self.redis_client.publish(lobby_channel, message_pubsub.model_dump_json(exclude_none=True))
+
+    async def broadcast_match_message(self, action: MatchAction, user_id: UserId) -> None:
+        pass
+
